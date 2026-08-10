@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Instrufilt</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!--
+    Mark geometry from the "Sibling logo concept" design project. Split into
+    note + dot as separate symbols (not one path) so the dot can be animated
+    independently — that split is what every motion state in the design is
+    built on, and it is why the dot can bounce while the note squashes.
+  -->
+  <svg width="0" height="0" class="defs" aria-hidden="true">
+    <defs>
+      <linearGradient id="ifGrad" gradientUnits="userSpaceOnUse" x1="52" y1="14" x2="196" y2="224">
+        <stop offset="0%" stop-color="var(--ifA)"></stop>
+        <stop offset="100%" stop-color="var(--ifB)"></stop>
+      </linearGradient>
+      <symbol id="ifNote" viewBox="0 0 256 256">
+        <g transform="translate(128 128) scale(0.86) translate(-123.9 -119)">
+          <path fill="url(#ifGrad)" fill-rule="nonzero" d="M141.21 176.30 A46 34 -16 1 1 52.79 201.70 A46 34 -16 1 1 141.21 176.30 Z M118 76 L136 76 L136 194 L118 194 Z M118 76 L152 76 C190 78 210 116 196 156 C192 172 184 181 176 187 C187 156 178 127 152 113 C147 110 141 108 130 107 Z"></path>
+        </g>
+      </symbol>
+      <symbol id="ifDot" viewBox="0 0 256 256">
+        <g transform="translate(128 128) scale(0.86) translate(-123.9 -119)">
+          <path fill="url(#ifGrad)" d="M113 28 A14 14 0 1 1 141 28 A14 14 0 1 1 113 28 Z"></path>
+        </g>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="glow" aria-hidden="true"></div>
+
+  <div class="panel">
+    <header class="header">
+      <!-- data-state drives which motion loop runs; see .mark[data-state] in CSS -->
+      <div class="mark" id="mark" data-state="idle">
+        <span class="mark-tile"></span>
+        <span class="mark-rings" aria-hidden="true"><i></i><i></i></span>
+        <span class="mark-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <svg class="mark-note" viewBox="0 0 256 256"><use href="#ifNote"></use></svg>
+        <svg class="mark-dot" viewBox="0 0 256 256"><use href="#ifDot"></use></svg>
+      </div>
+      <h1 class="wordmark">instru<span class="wordmark-grad">filt</span><span class="wordmark-dot">.</span></h1>
+      <span class="status-badge" id="status-badge">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Off</span>
+      </span>
+    </header>
+
+    <div class="song-row">
+      <p class="now-playing" id="now-playing">No media detected</p>
+      <button class="pill-btn" id="howto-btn" type="button" hidden
+              title="Search YouTube for a tutorial for this song">How to play <span aria-hidden="true">↗</span></button>
+      <button class="pill-btn" id="songsterr-btn" type="button" hidden
+              title="Find this song's tab on Songsterr">Tab <span aria-hidden="true">↗</span></button>
+      <button class="icon-btn" id="refresh-lyrics" type="button" title="Look up lyrics again" hidden>
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M13.5 2v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="chord-bar" id="chord-bar" hidden>
+      <span class="chord-tier" id="chord-tier">
+        <span class="chord-tier-dot" aria-hidden="true"></span>
+        <span id="chord-tier-text">Listening</span>
+      </span>
+      <span class="chord-key" id="chord-key"></span>
+      <span class="spacer"></span>
+      <div class="transpose" role="group" aria-label="Transpose">
+        <button class="icon-btn sm" id="transpose-down" type="button" title="Transpose down">&minus;</button>
+        <span class="transpose-val" id="transpose-val">0</span>
+        <button class="icon-btn sm" id="transpose-up" type="button" title="Transpose up">+</button>
+      </div>
+      <button class="icon-btn sm" id="reanalyze" type="button" title="Listen again from scratch">
+        <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M13.5 2v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="chord-progress" id="chord-progress" hidden><span id="chord-progress-fill"></span></div>
+
+    <!-- Now/next: what the hands do, readable from a meter away. The inline
+         chords answer "where am I"; this answers "what do I play next".
+         Tapping the big chord opens the fingering tray below. -->
+    <div class="now-strip" id="now-strip" hidden>
+      <button class="now-chord" id="now-chord" type="button"
+              title="Show fingering diagram">&mdash;</button>
+      <svg class="now-arrow" id="now-arrow" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <path d="M3 8h9M9 4.5L12.5 8L9 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="next-chord" id="next-chord"></span>
+    </div>
+    <div class="diagram-tray" id="diagram-tray" hidden>
+      <figure class="diagram"><svg id="diagram-now" viewBox="0 0 84 100" role="img"></svg><figcaption id="diagram-now-label"></figcaption></figure>
+      <figure class="diagram"><svg id="diagram-next" viewBox="0 0 84 100" role="img"></svg><figcaption id="diagram-next-label"></figcaption></figure>
+    </div>
+
+    <!-- The lead sheet. Sized to take whatever vertical space is left. -->
+    <div class="sheet-wrap">
+      <div class="sheet" id="sheet"></div>
+      <div class="sheet-gap" id="sheet-gap" aria-hidden="true">
+        <div class="sheet-gap-chords" id="sheet-gap-chords" hidden></div>
+        <div class="sheet-gap-row">
+          <div class="sheet-gap-bar"><span class="sheet-gap-fill" id="sheet-gap-fill"></span></div>
+          <span class="sheet-gap-num" id="sheet-gap-num"></span>
+        </div>
+      </div>
+      <p class="sheet-status" id="sheet-status"></p>
+    </div>
+
+    <button class="btn-primary" id="toggle-btn" type="button">
+      <span id="toggle-label">Start isolating</span>
+    </button>
+    <p class="hint" id="hint">Play something in this tab, then press Start.</p>
+
+    <section class="section">
+      <label class="field-label" for="mode-select">Isolation mode</label>
+      <div class="select-wrap">
+        <select id="mode-select">
+          <option value="vocal_rhythm">Vocal + rhythm</option>
+          <option value="vocal_only">Vocal only</option>
+          <option value="lead_line">Lead line</option>
+        </select>
+        <span class="select-arrow" aria-hidden="true">
+          <svg viewBox="0 0 12 12" width="12" height="12"><path d="M2 4.5L6 8.5L10 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </div>
+      <p class="mode-hint" id="mode-hint"></p>
+    </section>
+
+    <section class="section">
+      <div class="field-row">
+        <label class="field-label" for="amount-slider">Isolation</label>
+        <output class="field-value" id="amount-value">100%</output>
+      </div>
+      <input type="range" id="amount-slider" min="0" max="100" value="100" step="1">
+      <p class="hint">At 0% you hear the untouched mix — useful as an A/B.</p>
+    </section>
+
+    <section class="section">
+      <div class="field-row">
+        <label class="field-label" for="makeup-slider">Output level</label>
+        <output class="field-value" id="makeup-value">0 dB</output>
+      </div>
+      <input type="range" id="makeup-slider" min="-6" max="18" value="0" step="1">
+      <div class="toggles">
+        <label class="switch">
+          <input type="checkbox" id="autogain-toggle">
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span class="switch-label">Auto-level</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="mono-toggle">
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span class="switch-label">Mono</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="chords-toggle" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span class="switch-label">Chords</span>
+        </label>
+        <label class="switch" title="Fetch a ready-made chart from Karalyr (the family's own database) or Songle when one exists for this song. Applies from the next song. Audio never leaves the browser — only the video's address is sent.">
+          <input type="checkbox" id="online-chords-toggle" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span class="switch-label">Online chords</span>
+        </label>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p class="footer-note" id="latency-note"></p>
+    </footer>
+  </div>
+
+  <script src="../shared/song-match.js"></script>
+  <script src="../shared/video-key.js"></script>
+  <script src="../shared/line-tokens.js"></script>
+  <script src="../shared/lrc.js"></script>
+  <script src="../shared/chord-layout.js"></script>
+  <script src="../shared/chord-format.js"></script>
+  <script src="../shared/chord-shapes.js"></script>
+  <script src="leadsheet.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

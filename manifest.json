@@ -1,0 +1,77 @@
+{
+  "manifest_version": 3,
+  "name": "Instrufilt — isolate vocals, practise your instrument",
+  "version": "0.1.0",
+  "description": "Isolate the lead vocal in any tab and follow a synced chord chart. Practise your instrument against the original singer.",
+  "minimum_chrome_version": "111",
+
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "activeTab",
+    "tabs",
+    "storage",
+    "sidePanel",
+    "scripting",
+    "contextMenus"
+  ],
+
+  "host_permissions": ["<all_urls>"],
+
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+
+  "action": {
+    "default_title": "Instrufilt",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "commands": {
+    "toggle-isolate": {
+      "suggested_key": { "default": "Alt+Shift+I" },
+      "description": "Toggle vocal isolation on the current tab"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "shared/song-match.js",
+        "shared/video-key.js",
+        "content/site-adapters.js",
+        "content/media-bridge.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://open.spotify.com/*"],
+      "js": ["content/spotify-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://lrclib.net https://www.karalyr.com https://karalyr.com https://widget.songle.jp https://instrufilt.com https://www.instrufilt.com http://localhost:3000 http://127.0.0.1:3000"
+  }
+}

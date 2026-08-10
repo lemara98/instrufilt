@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <!--
+    Loaded before offscreen.js, which owns the chord accumulator and runs the
+    end-of-song re-decode here rather than in the panel or the service worker —
+    this document is the only one whose lifetime matches the capture's.
+  -->
+  <script src="shared/chord-decode.js"></script>
+  <script src="shared/chord-format.js"></script>
+  <script src="shared/chord-source.js"></script>
+  <script src="offscreen.js"></script>
+</body>
+</html>

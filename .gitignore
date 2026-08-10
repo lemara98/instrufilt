@@ -1,0 +1,12 @@
+# Native test binaries (make's $(BUILD) dir)
+/build/
+
+# Compiled WASM — rebuild with `make` (needs emscripten)
+/wasm/build/*.wasm
+
+# Packaged extension
+/dist/
+
+# Editor/OS noise
+.DS_Store
+*.swp

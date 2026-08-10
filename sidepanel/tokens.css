@@ -1,0 +1,87 @@
+/* Instrufilt design tokens.
+ *
+ * Karafilt hard-codes its colours across two CSS files with no :root variables
+ * at all, so the same hex appears a dozen times and a palette change means a
+ * find-and-replace. Instrufilt starts with real tokens.
+ *
+ * The base (#0b0e1a surface, #f1efff text, Space Grotesk) is the family's,
+ * shared with Karafilt and Karalyr. What differs is the accent pair:
+ *
+ *   Karafilt   #8b7cff -> #b46cff   violet      (voice)
+ *   Karalyr    #b46cff -> #ff6b9d   violet-pink (lyrics)
+ *   Instrufilt #ffd166 -> #f4743b   brass       (instrument)
+ *
+ * Brass is from the "Sibling logo concept" design project. Both siblings are
+ * cool violets, so a warm gold-to-orange is the one direction that is distinct
+ * from BOTH at 16px toolbar size rather than merely a different cool hue — and
+ * brass reads as "instrument" on its own.
+ *
+ * The logo tile uses its own warm near-black (--tile), not the panel surface.
+ * Keeping the panel on the family's cool #0b0e1a while the mark sits on a warm
+ * tile is deliberate and comes straight from the design.
+ *
+ * The design ships three alternates — Teal #7cf0d2/#2fa8c4, Violet
+ * #8b7cff/#b46cff, Neon #b46cff/#ff6b9d. Swapping is a three-line change here.
+ */
+
+:root {
+  /* surfaces */
+  --bg: #0b0e1a;
+  --bg-elevated: #131729;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* text */
+  --text: #f1efff;
+  --text-muted: #9095b3;
+  --text-dim: #6b7294;
+
+  /* accent — Instrufilt brass */
+  --ifA: #ffd166;
+  --ifB: #f4743b;
+  --tile: #1c1712;          /* warm near-black the mark sits on */
+  --paper: #f4efe6;         /* light-background variant of the tile */
+  --accent: var(--ifA);
+  --accent-soft: rgba(255, 209, 102, 0.12);
+  --accent-border: rgba(255, 209, 102, 0.32);
+  --accent-gradient: linear-gradient(100deg, #ffd166 0%, #f4743b 100%);
+  /* On brass, near-black beats white for label contrast. */
+  --on-accent: #1c1712;
+
+  /* state */
+  --success: #4ade80;
+  --danger: #f87171;
+  --warning: #fbbf24;
+
+  /* type */
+  /* Broad-coverage Latin fonts (Noto Sans … Arial) must come BEFORE the
+     script-specific fonts: on Linux the earlier faces are often absent, and
+     "Noto Sans CJK TC" would then claim Latin text too — it has no
+     precomposed š/ć/č, so diacritics render as detached marks on the wrong
+     letter. The script fonts still catch chars the Latin ones lack. */
+  --font-sans: "Space Grotesk", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    Roboto, "Noto Sans", "Liberation Sans", "DejaVu Sans", Arial,
+    "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Thai",
+    "Microsoft JhengHei", "PingFang TC", "Noto Sans CJK TC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* geometry */
+  --radius: 10px;
+  --radius-sm: 7px;
+  --gap: 10px;
+}
+
+/* The panel is fixed-width and always dark; there is no light theme to honour,
+ * so prefers-color-scheme is deliberately not consulted. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "_readme": [
+    "The vendoring contract. Files listed here are copied VERBATIM from Karafilt.",
+    "Never edit a vendored file in place — edit it upstream in Karafilt and re-sync,",
+    "or promote it to a fork (move it out of this list and record why in _promotions).",
+    "",
+    "Run `scripts/sync-shared.sh` to pull upstream changes and refresh the hashes.",
+    "Run `scripts/sync-shared.sh --check` (or `node test/vendor-drift.test.mjs`) to verify."
+  ],
+  "_globalNames": [
+    "Vendored files set Karafilt* globals (window.KarafiltSongMatch, KarafiltLineTokens,",
+    "KarafiltVideoKey, KarafiltFancySelect). DO NOT rename them during sync.",
+    "",
+    "Verbatim vendoring makes the drift check a plain SHA-256 comparison. A sync script",
+    "that rewrites identifiers turns every drift check into a semantic diff, and the",
+    "discipline dies within a month. Alias at the point of use instead — which is what",
+    "Karafilt itself already does at service-worker.js:7 (`const SM = self.KarafiltSongMatch;`)."
+  ],
+  "_promotions": [],
+  "upstream": {
+    "name": "karafilt",
+    "repo": "git@github.com:lemara98/karafilt.git",
+    "defaultPath": "../karaoke-filter-plugin",
+    "envVar": "KARAFILT_REPO"
+  },
+  "files": [
+    {
+      "path": "shared/song-match.js",
+      "sha256": "0dd52533138adab991f382af75cf9f932365ae75512e282a35f545b174f1f37d",
+      "why": "Title -> {artist, track} candidate parsing + fuzzy match scoring. UMD, DOM-free, no chrome.*. Maintained in 4 places across the family today; this is the one worth never forking."
+    },
+    {
+      "path": "shared/video-key.js",
+      "sha256": "f38a05251e2fd73cbb19158e726feab60d2237dd781ac8663862b554b71a04b4",
+      "why": "Stable per-song identity (yt:<id> / sp:<id> / host+path). Instrufilt keys its chord-chart cache on exactly this, so it MUST agree with Karafilt and Karalyr byte for byte."
+    },
+    {
+      "path": "shared/line-tokens.js",
+      "sha256": "7ade1f4dbb54be611a6b5540ee32799ff94cc6d3afee05d497cf439e30a56e78",
+      "why": "Lyric line -> word span tokenisation. Consumed by the panel's makeLineEl; the lead sheet wraps its output rather than changing it."
+    },
+    {
+      "path": "shared/fancy-select.js",
+      "sha256": "27dbcea5fb42d90890e089381cda17097c91bbbf3fb99a7fa81bdcbe83fc4d95",
+      "why": "Progressive enhancement of a native <select> into option cards, keeping the <select> as source of truth. Reused verbatim for the isolation-mode picker."
+    },
+    {
+      "path": "content/site-adapters.js",
+      "sha256": "05392e1c7c6498edd450a4515002a21a219cbf5e2669b26e10df1b858f3b1f5f",
+      "why": "Per-site strategy (Spotify virtual media element; generic pipeline elsewhere). NOTE: Instrufilt needs isAd() on the YouTube path — contribute that UPSTREAM to Karafilt first (its lyrics mis-fire on ads too), then re-sync. Do not fork this file for it."
+    },
+    {
+      "path": "content/spotify-bridge.js",
+      "sha256": "a28b08dfe295b15b16262ab48861d085490d16973dcb20279d7337a7d3b74228",
+      "why": "MAIN-world hook that captures Spotify's never-attached <audio>. Pure playback-state relay, entirely independent of what the extension does with audio."
+    },
+    {
+      "path": "wasm/src/kiss_fft.c",
+      "sha256": "84154815c4e734bdc986fae5f2301212b1ed4dd91e005bc88680218d4bc3bae3",
+      "why": "Vendored KissFFT (BSD-3). Upstream-of-upstream; tracked here only so an accidental local edit is caught."
+    },
+    {
+      "path": "wasm/src/kiss_fft.h",
+      "sha256": "9d6c7ddf520932c0aad669c86c064a24e571e594681be9f1491c14c9c9c75693",
+      "why": "KissFFT header."
+    },
+    {
+      "path": "wasm/src/kiss_fftr.c",
+      "sha256": "128b651120725e8d55f6b9edf5d44b06dc022b260894eac078c6ff8aa7159561",
+      "why": "KissFFT real-signal wrapper."
+    },
+    {
+      "path": "wasm/src/kiss_fftr.h",
+      "sha256": "a0f72c1bddc3126d7a51ad80e965b58f6af77e4419aa882a0b11951e783632a8",
+      "why": "KissFFT real-signal header."
+    },
+    {
+      "path": "wasm/src/_kiss_fft_guts.h",
+      "sha256": "dd1731891d0fff0e297198847de39216c5c8b9677ea4fe53160d1f6c74218d40",
+      "why": "KissFFT internals."
+    },
+    {
+      "path": "wasm/src/kiss_fft_log.h",
+      "sha256": "f954cb6890ec999f7fbc80cdd1c8c0194bbaeb0f1c27e11bd23450f53871cf8c",
+      "why": "KissFFT logging shim."
+    },
+    {
+      "path": "test/song-match.test.mjs",
+      "sha256": "8fd6531ba49a7a93b74cfb77bd9f80d8348ae8284772c799eaaeead2bb673f55",
+      "why": "Run UNMODIFIED against the vendored song-match.js. A vendored test passing unmodified is the vendoring proof — it catches 'hash matched but a global collided'."
+    },
+    {
+      "path": "test/corpus.json",
+      "sha256": "f8e78948a39616821026de131c257ff803ec29270aa86499a25b8b4c5066a3d7",
+      "why": "Real-world title corpus backing song-match.test.mjs."
+    },
+    {
+      "path": "test/line-tokens.test.mjs",
+      "sha256": "14f39940005b6364393e1aa5a291a1d2c0b1387008ee7691032ea0a7f76ea1c5",
+      "why": "Same rationale as song-match.test.mjs, for line-tokens.js."
+    },
+    {
+      "path": "test/site-adapters.test.mjs",
+      "sha256": "ba5c3dd8bcffbda162dfa9d7c9221029f2658dfc5dd6f64c960cbb5cbda99f2c",
+      "why": "Same rationale, for the adapter's pure helpers (trackIdFromHref, parseTimeText, interpolate)."
+    }
+  ]
+}

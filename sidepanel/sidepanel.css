@@ -1,0 +1,810 @@
+/* Instrufilt side panel.
+ *
+ * Motion is lifted from the "Sibling logo concept" project's motion kit. The
+ * design names seven loops and what each is for; three of them map onto states
+ * this panel actually has, so they are used for exactly that rather than as
+ * decoration:
+ *
+ *   Bounce   idle          the karaoke ball, borrowed — dot bounces, note squashes
+ *   Breathe  starting      "while stems separate"
+ *   Signal   isolating     Karafilt's bars, behind the note; dot orbits
+ *   Pulse    listening     rings off the tile — reserved for chord detection
+ *
+ * All CSS, no JS, and prefers-reduced-motion is honoured in tokens.css.
+ */
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  min-width: 300px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.defs { position: absolute; }
+
+/* Warm bloom, so the brass mark sits in its own light rather than on top of
+   the family's cool background unaided. */
+.glow {
+  position: fixed;
+  inset: -20% -30% auto;
+  height: 260px;
+  background: radial-gradient(60% 100% at 50% 0%, rgba(244, 116, 59, 0.16), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Full-height flex column: the lead sheet takes whatever the controls leave,
+   and the controls never scroll away from under the user's cursor. */
+.panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── header ───────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wordmark {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  flex: 1;
+}
+.wordmark-grad {
+  background: linear-gradient(100deg, var(--ifA), var(--ifB));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.wordmark-dot { color: var(--ifB); }
+
+/* ── the mark ─────────────────────────────────────────────────────────── */
+
+.mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+.mark-tile {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--tile);
+}
+.mark-note,
+.mark-dot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.mark-note { transform-origin: 50% 78%; }
+
+/* Signal: Karafilt's equalizer bars, behind the note. Hidden unless isolating. */
+.mark-eq {
+  position: absolute;
+  left: 0; right: 0; bottom: 5px;
+  height: 13px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  opacity: 0;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+.mark-eq i {
+  width: 2px;
+  height: 100%;
+  border-radius: 2px;
+  transform-origin: 50% 100%;
+  transform: scaleY(0.28);
+}
+.mark-eq i:nth-child(1), .mark-eq i:nth-child(2) { background: var(--ifA); }
+.mark-eq i:nth-child(3), .mark-eq i:nth-child(4) { background: var(--ifB); }
+
+/* Pulse: rings off the tile. Reserved for the chord "Listening" state. */
+.mark-rings { position: absolute; inset: 0; }
+.mark-rings i {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  border: 1.5px solid var(--ifA);
+  opacity: 0;
+}
+.mark-rings i:nth-child(2) { border-color: var(--ifB); }
+
+/* idle — Bounce */
+.mark[data-state="idle"] .mark-dot { animation: ifBounce 1.25s cubic-bezier(.34,.1,.5,1) infinite; }
+.mark[data-state="idle"] .mark-note { animation: ifSquash 1.25s ease-in-out infinite; }
+
+/* starting — Breathe */
+.mark[data-state="starting"] { animation: ifBreathe 2.4s ease-in-out infinite; }
+.mark[data-state="starting"] .mark-dot {
+  transform-origin: 50% 18%;
+  animation: ifDotFade 2.4s ease-in-out infinite;
+}
+
+/* isolating — Signal */
+.mark[data-state="active"] .mark-eq { opacity: 0.32; }
+.mark[data-state="active"] .mark-eq i:nth-child(1) { animation: ifEq .90s ease-in-out infinite; }
+.mark[data-state="active"] .mark-eq i:nth-child(2) { animation: ifEq 1.15s ease-in-out infinite .18s; }
+.mark[data-state="active"] .mark-eq i:nth-child(3) { animation: ifEq .78s ease-in-out infinite .34s; }
+.mark[data-state="active"] .mark-eq i:nth-child(4) { animation: ifEq 1.05s ease-in-out infinite .10s; }
+.mark[data-state="active"] .mark-dot { animation: ifDotOrbit 2.6s ease-in-out infinite; }
+
+/* listening — Pulse */
+.mark[data-state="listening"] .mark-rings i { animation: ifRing 2.4s ease-out infinite; }
+.mark[data-state="listening"] .mark-rings i:nth-child(2) { animation-delay: .8s; }
+
+@keyframes ifBounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-12%); }
+  58% { transform: translateY(0); }
+  70% { transform: translateY(-3.5%); }
+  82% { transform: translateY(0); }
+}
+@keyframes ifSquash {
+  0%, 100% { transform: scaleY(1); }
+  56% { transform: scaleY(1); }
+  60% { transform: scaleY(.965); }
+  66% { transform: scaleY(1); }
+}
+@keyframes ifBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.055); }
+}
+@keyframes ifDotFade {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .3; transform: scale(.8); }
+}
+@keyframes ifEq {
+  0%, 100% { transform: scaleY(.28); }
+  50% { transform: scaleY(1); }
+}
+@keyframes ifDotOrbit {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(6%, -4%); }
+}
+@keyframes ifRing {
+  0% { transform: scale(.62); opacity: .55; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+/* ── status ───────────────────────────────────────────────────────────── */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex: none;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.status-badge.is-active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--ifA);
+}
+.status-badge.is-active .status-dot { background: var(--ifA); }
+.status-badge.is-error { border-color: rgba(248,113,113,.35); color: var(--danger); }
+.status-badge.is-error .status-dot { background: var(--danger); }
+
+.song-row { display: flex; align-items: center; gap: 8px; }
+
+.now-playing {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.now-playing.has-song { color: var(--text); }
+
+.icon-btn {
+  appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease;
+}
+.icon-btn:hover { color: var(--ifA); border-color: var(--accent-border); }
+.icon-btn:focus-visible { outline: 2px solid var(--ifA); outline-offset: 2px; }
+.icon-btn.spinning svg { animation: ifSpin .9s linear infinite; }
+@keyframes ifSpin { to { transform: rotate(360deg); } }
+
+/* ── chord bar ────────────────────────────────────────────────────────── */
+
+.chord-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.chord-bar[hidden] { display: none; }
+.chord-bar .spacer { flex: 1; }
+
+.chord-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.chord-tier-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+/* Listening is a BUILD state, not an error and not a finished chart. It reads
+   as in-progress on purpose: the chords on screen are a transcript arriving
+   after the fact, and styling them as authoritative would be a lie. */
+.chord-bar[data-tier="listening"] .chord-tier {
+  border-color: var(--accent-border);
+  color: var(--ifA);
+}
+.chord-bar[data-tier="listening"] .chord-tier-dot {
+  background: var(--ifA);
+  animation: ifPulseDot 1.6s ease-in-out infinite;
+}
+.chord-bar[data-tier="chart"] .chord-tier {
+  border-color: rgba(74, 222, 128, .3);
+  color: var(--success);
+}
+.chord-bar[data-tier="chart"] .chord-tier-dot { background: var(--success); }
+
+@keyframes ifPulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.75); }
+}
+
+.chord-key {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.transpose { display: inline-flex; align-items: center; gap: 3px; }
+.transpose-val {
+  min-width: 2ch;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ifA);
+}
+.icon-btn.sm {
+  width: 19px;
+  height: 19px;
+  font-size: 13px;
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+
+/* Coverage during the first pass. Deliberately a thin line and not a spinner:
+   it is telling the user that something is accumulating, not that they are
+   waiting for a request. */
+.chord-progress {
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  margin-top: -6px;
+}
+.chord-progress[hidden] { display: none; }
+.chord-progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent-gradient);
+  transition: width .3s linear;
+}
+
+/* ── the lead sheet ───────────────────────────────────────────────────── */
+
+/* Flex column rather than an overlay: the source/timing note sits BELOW the
+   lyrics instead of floating over them. An absolutely-positioned note with a
+   gradient scrim still covered the last visible line, and no amount of scrim
+   makes text on top of text readable. */
+.sheet-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.sheet {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+/* Trailing space so the LAST line can still scroll to vertical centre.
+   Deliberately a spacer and not padding-bottom: a percentage padding resolves
+   against WIDTH, so `padding-bottom: 40%` was ~188px on a 470px-wide panel and
+   the box could not shrink below its own padding — which pushed the status
+   strip out of the clipped wrapper entirely. */
+.sheet::after {
+  content: "";
+  display: block;
+  height: 45%;
+}
+.sheet.unsynced::after { height: 0; }   /* linear scroll needs no headroom */
+.sheet::-webkit-scrollbar { width: 6px; }
+.sheet::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
+
+.line {
+  margin: 0 0 9px;
+  font-size: 14.5px;
+  line-height: 1.42;
+  color: var(--text-dim);
+  transition: color .25s ease;
+}
+.line.active { color: var(--text); }
+
+/*
+ * Each word is wrapped in a two-row column: chord above, word below.
+ *
+ * This is the whole reason the lead sheet costs almost nothing. The chord row
+ * is a sibling INSIDE the word's own inline box, so the sync engine is
+ * untouched — updateWordHighlight() still does querySelectorAll(".word") and
+ * still gets the same spans in the same document order. Absolutely-positioned
+ * chord chips would have needed layout measurement, would have broken wrapping
+ * at 320px, and would have fought dir="auto".
+ */
+.wcol {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  vertical-align: baseline;
+}
+
+.chord {
+  font-family: var(--font-mono);
+  font-size: 0.76em;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ifA);
+  white-space: nowrap;
+}
+/* Reserve the chord row ONLY when the song has chords, so a lyrics-only song
+   does not waste half its vertical space on empty rows. */
+.sheet.has-chords .chord:empty::before { content: "\00a0"; }
+/* Live (first-pass) chords are provisional and must not look authoritative. */
+.chord.is-live { opacity: .55; font-style: italic; }
+.chord.is-low-confidence { opacity: .7; text-decoration: underline dotted; text-underline-offset: 2px; }
+
+.word { transition: color .18s ease; }
+.line.active .word.upcoming { color: rgba(241, 239, 255, 0.5); }
+.line.active .word.sung { color: var(--text); }
+
+/* Liquid sweep: the word being sung fills left-to-right. CSS reads
+   --word-progress off the span, written per frame by setWordProgress. */
+.line.active .word.singing {
+  background: linear-gradient(
+    90deg,
+    var(--ifA) max(0%, calc(var(--word-progress, 0%) - 4%)),
+    #ffffff var(--word-progress, 0%),
+    rgba(255, 255, 255, 0.55) min(100%, calc(var(--word-progress, 0%) + 6%))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Plain (untimed) lyrics: no per-word state to show, so don't fake one. */
+.sheet.unsynced .line { color: var(--text-muted); }
+
+.sheet-empty {
+  padding: 18px 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.sheet-status {
+  flex: none;
+  margin: 0;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sheet-status:empty { display: none; }
+
+/* Instrumental count-in. For a musician these stretches — intros, solos,
+   breakdowns — are the parts being played, so the bar earns its space. */
+/* A self-contained pill, not a bare bar. Floated at 50% with no background it
+   landed on whatever lyric line happened to be there and read as an underline
+   rather than a count-in. */
+.sheet-gap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: rgba(16, 12, 8, 0.92);
+  box-shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  pointer-events: none;
+}
+.sheet-gap-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+/* Two rows can't live in a pill. When the gap has chords the card squares
+   off and the count-in bar becomes its second line. */
+.sheet-gap.has-chords { border-radius: var(--radius); }
+.sheet-gap-chords {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px 10px;
+}
+.sheet-gap-chords[hidden] { display: none; }
+
+/* Chord chips: the gap card's timeline and the chords-only chart share one
+   vocabulary. Dim until due, brass while sounding, faded once passed. */
+.gap-chip {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-dim);
+  transition: color .15s ease, opacity .15s ease, transform .15s ease;
+}
+.gap-chip.is-now { color: var(--ifA); transform: scale(1.12); }
+.gap-chip.is-past { opacity: .4; }
+.gap-chip.is-live { opacity: .55; font-style: italic; }
+.sheet-gap-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.sheet-gap-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: var(--accent-gradient);
+}
+.sheet-gap-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ifA);
+  min-width: 1.4em;
+  text-align: right;
+}
+
+/* The chords-only chart: instrumentals and lyricless songs render the whole
+   chart as a wrapping chip stream inside the sheet itself. */
+.chord-stream {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 10px 14px;
+  padding: 4px 2px;
+}
+.chord-stream .gap-chip { font-size: 17px; }
+
+/* ── now/next strip ───────────────────────────────────────────────────── */
+
+/* Inline chords are 11px — fine for "where am I", useless from a meter away
+   with a guitar in hand. This strip is the glanceable answer to "what do my
+   hands do next". Hidden whenever there are no chords, so lyrics-only songs
+   lose no space. */
+.now-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.now-strip[hidden] { display: none; }
+.now-chord {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--ifA);
+}
+.now-chord:focus-visible { outline: 2px solid var(--ifA); outline-offset: 2px; border-radius: 4px; }
+/* Long labels ("F#m7b5", "Eb/Ab") step down so now+next fit at 320px. */
+.now-chord.long { font-size: 23px; }
+/* Same honesty rule as .chord.is-live: a causal transcript must not look
+   like a chart that leads. */
+.now-chord.is-live { opacity: .55; font-style: italic; }
+.now-arrow { color: var(--text-dim); align-self: center; flex: none; }
+.next-chord {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── fingering tray ───────────────────────────────────────────────────── */
+
+/* Toggled by tapping the big chord — hover with a guitar in hand is fiction.
+   A block below the strip, never an overlay on the sheet (see the sheet-wrap
+   comment for how that lesson was learned). */
+.diagram-tray {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  padding: 8px 12px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.diagram-tray[hidden] { display: none; }
+.diagram {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.diagram svg { width: 76px; height: 90px; color: var(--border-strong); }
+.diagram figcaption {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.diagram:first-child figcaption { color: var(--ifA); }
+
+/* ── learn buttons ────────────────────────────────────────────────────── */
+
+/* Same recipe as .status-badge.is-active so they read as family. */
+.pill-btn {
+  appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--ifA);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.pill-btn:hover { background: rgba(255, 209, 102, 0.2); border-color: var(--ifA); }
+.pill-btn:focus-visible { outline: 2px solid var(--ifA); outline-offset: 2px; }
+.pill-btn[hidden] { display: none; }
+
+/* ── primary action ───────────────────────────────────────────────────── */
+
+.btn-primary {
+  appearance: none;
+  border: 0;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--accent-gradient);
+  color: var(--on-accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .3s ease, filter .2s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -14px var(--ifB);
+}
+.btn-primary:active:not(:disabled) { transform: translateY(0); }
+.btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary.is-active {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+.btn-primary.is-active:hover { box-shadow: none; background: var(--surface-hover); }
+.btn-primary:focus-visible { outline: 2px solid var(--ifA); outline-offset: 2px; }
+
+.hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* ── sections and fields ──────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.field-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.field-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.field-value { font-family: var(--font-mono); font-size: 12px; color: var(--ifA); }
+
+.mode-hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-dim); min-height: 2.6em; }
+
+/* select */
+.select-wrap { position: relative; }
+.select-wrap select {
+  appearance: none;
+  width: 100%;
+  padding: 8px 30px 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.select-wrap select:focus-visible { outline: 2px solid var(--ifA); outline-offset: 1px; }
+.select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+  display: flex;
+}
+
+/* range */
+input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+input[type="range"]:focus-visible { outline: 2px solid var(--ifA); outline-offset: 4px; }
+input[type="range"]:disabled { opacity: .45; cursor: not-allowed; }
+
+/* switches — four of them no longer fit one row at 300px, so they wrap */
+.toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 3px; }
+.switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background .2s ease;
+  flex: none;
+}
+.switch-thumb {
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform .2s ease, background .2s ease;
+}
+.switch input:checked + .switch-track { background: var(--accent-soft); }
+.switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(13px);
+  background: var(--ifA);
+}
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--ifA); outline-offset: 2px; }
+.switch-label { font-size: 12px; color: var(--text-muted); }
+
+/* ── footer ───────────────────────────────────────────────────────────── */
+
+.footer { margin-top: 2px; }
+.footer-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
