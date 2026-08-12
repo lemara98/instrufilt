@@ -174,9 +174,45 @@
       </div>
     </section>
 
+    <!-- Per-song vote: shown while isolating (account.js drives it). Feeds the
+         community "does the isolation work on this song" stats. -->
+    <div class="vote-row" id="vote-row" hidden>
+      <span class="vote-label">How did it sound?</span>
+      <button class="vote-btn" id="vote-like" type="button" title="The isolation worked on this song">
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+          <path d="M5 7.5v6H3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2zm0 0 2.6-4.9a1.3 1.3 0 0 1 2.45.62L9.6 6h3.1a1.3 1.3 0 0 1 1.27 1.58l-1.06 4.9a1.3 1.3 0 0 1-1.27 1.02H5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        <span class="vote-count" id="vote-like-count"></span>
+      </button>
+      <button class="vote-btn" id="vote-dislike" type="button" title="The isolation struggled on this song">
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" style="transform:scale(-1)">
+          <path d="M5 7.5v6H3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2zm0 0 2.6-4.9a1.3 1.3 0 0 1 2.45.62L9.6 6h3.1a1.3 1.3 0 0 1 1.27 1.58l-1.06 4.9a1.3 1.3 0 0 1-1.27 1.02H5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        <span class="vote-count" id="vote-dislike-count"></span>
+      </button>
+    </div>
+
     <footer class="footer">
       <p class="footer-note" id="latency-note"></p>
+      <!-- instrufilt.com session chip (account.js fills it; links to /account). -->
+      <a id="account-chip" class="account-chip" hidden target="_blank" rel="noopener noreferrer" title="Instrufilt account">
+        <span class="account-avatar" id="account-avatar">?</span>
+        <span class="account-email" id="account-email"></span>
+      </a>
     </footer>
+  </div>
+
+  <!-- Sign-in gate: covers the whole panel until the instrufilt.com session
+       probe answers signed-in. One account for the family — an existing
+       Karafilt account works here as-is. account.js shows/hides it. -->
+  <div id="auth-gate" class="auth-gate" hidden>
+    <div class="auth-gate-card">
+      <svg class="auth-gate-mark" viewBox="0 0 256 256" aria-hidden="true"><use href="#ifNote"></use></svg>
+      <h2 class="auth-gate-title">Sign in to Instrufilt</h2>
+      <p class="auth-gate-text">Instrufilt is free — sign in to start isolating, track your practice time and earn badges.</p>
+      <button id="auth-gate-signin" class="btn-primary auth-gate-btn" type="button">Sign in</button>
+      <p class="auth-gate-hint">No account yet? You can create one on the sign-in page — and a Karafilt account already works here.</p>
+    </div>
   </div>
 
   <script src="../shared/song-match.js"></script>
@@ -187,6 +223,7 @@
   <script src="../shared/chord-format.js"></script>
   <script src="../shared/chord-shapes.js"></script>
   <script src="leadsheet.js"></script>
+  <script src="account.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

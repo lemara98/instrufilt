@@ -90,10 +90,12 @@
 
   // The two halves of the sheet-status strip, composed in one place so the
   // lyrics path and the chords path stop overwriting each other's credit.
-  let lyricsStatus = "";
-  let chordsStatus = "";
+  // Each half is a list of {text, href?} segments; Karalyr segments link home
+  // so the credit states where the data comes from, not just a bare name.
+  let lyricsStatus = [];
+  let chordsStatus = [];
   function updateSheetStatus() {
-    sheet.setStatus([lyricsStatus, chordsStatus].filter(Boolean).join(" · "));
+    sheet.setStatus([...lyricsStatus, ...chordsStatus]);
   }
 
   // ── rendering ─────────────────────────────────────────────────────────────
@@ -191,17 +193,18 @@
       // know whether the sheet can be trusted to the syllable or only to the
       // line — chord placement is exact in the first case and estimated in the
       // second, and there is no way to tell by looking.
-      const src = result.source === "karalyr" ? "Karalyr" : "LRCLib";
       const timing = result.wordTimed ? "word-synced"
         : result.syncedLyrics ? "line-synced"
         : "no timing";
-      lyricsStatus = `${src} · ${timing}`;
+      lyricsStatus = result.source === "karalyr"
+        ? [{ text: "Lyrics: Karalyr", href: "https://www.karalyr.com" }, { text: timing }]
+        : [{ text: `Lyrics: LRCLib · ${timing}` }];
       updateSheetStatus();
       return;
     }
 
     sheet.setLyrics(null);
-    lyricsStatus = "";
+    lyricsStatus = [];
     updateSheetStatus();
     if (!hasMedia) sheet.showEmpty("No media on this tab");
     else if (state && state.status) sheet.showEmpty(state.status);
@@ -216,7 +219,7 @@
     els.chordBar.hidden = !tier;
     if (!tier) {
       els.chordProgress.hidden = true;
-      chordsStatus = "";
+      chordsStatus = [];
       updateSheetStatus();
       sheet.setChords([]);
       return;
@@ -245,9 +248,9 @@
     // on screen; the status strip is the one line that stays on screen as long
     // as the sheet does. Karalyr is the family's own data — credited for
     // transparency, not obligation.
-    chordsStatus = source === "songle" ? "Chords: Songle (AIST)"
-      : source === "karalyr" ? "Chords: Karalyr"
-      : "";
+    chordsStatus = source === "songle" ? [{ text: "Chords: Songle (AIST)" }]
+      : source === "karalyr" ? [{ text: "Chords: Karalyr", href: "https://www.karalyr.com" }]
+      : [];
     updateSheetStatus();
 
     const shownKey = key ? InstrufiltChordFormat.transposeKey(key, transpose) : null;
@@ -495,8 +498,8 @@
         if (message.videoKey !== currentVideoKey) {
           currentVideoKey = message.videoKey;
           sheet.reset();
-          lyricsStatus = "";
-          chordsStatus = "";
+          lyricsStatus = [];
+          chordsStatus = [];
           updateSheetStatus();
           sheet.showEmpty("Looking for lyrics…");
           clearChords();

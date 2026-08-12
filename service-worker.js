@@ -18,7 +18,7 @@
 //     mirrored so a restarted SW can recover, but the mirror is only trusted
 //     when getContexts() confirms the offscreen document is genuinely alive.
 
-importScripts("shared/song-match.js", "shared/lyrics-fetch.js", "shared/chord-format.js", "shared/chord-source.js", "shared/songle-fetch.js", "shared/karalyr-fetch.js");
+importScripts("shared/song-match.js", "shared/video-key.js", "shared/lyrics-fetch.js", "shared/chord-format.js", "shared/chord-source.js", "shared/songle-fetch.js", "shared/karalyr-fetch.js");
 
 // Aliased at the point of use rather than renamed during vendoring — see
 // vendor/MANIFEST.json for why the Karafilt* names are kept.
@@ -133,6 +133,9 @@ async function recoverCaptureState() {
     } else {
       chrome.storage.session.remove("capturedTab", () => void chrome.runtime.lastError);
     }
+    // Continue the open practice segment across the SW restart when the
+    // capture survived; close it out at its last heartbeat when it didn't.
+    await recoverPendingUsage(offscreenAlive && capturedTabId !== null);
   } catch (e) {
     console.warn("[if/sw] recoverCaptureState failed:", e);
   }
@@ -185,6 +188,7 @@ async function handleStartCapture(tabId, providedStreamId) {
     try { url = (await chrome.tabs.get(tabId)).url; } catch {}
 
     setCapturedTab(tabId, url);
+    openUsage(url, settings.mode);
 
     chrome.runtime.sendMessage({
       type: "STREAM_READY",
@@ -210,8 +214,9 @@ async function handleStartCaptureViaDisplayMedia(tabId) {
     let url = null;
     try { url = (await chrome.tabs.get(tabId)).url; } catch {}
     // Set optimistically so the panel can show "starting"; DISPLAY_MEDIA_FAILED
-    // rolls it back if the user cancels the picker.
+    // rolls it back if the user cancels the picker (discarding the segment too).
     setCapturedTab(tabId, url);
+    openUsage(url, settings.mode);
     chrome.runtime.sendMessage({
       type: "START_VIA_DISPLAY_MEDIA",
       tabId,
@@ -225,6 +230,7 @@ async function handleStartCaptureViaDisplayMedia(tabId) {
 }
 
 function stopCapture() {
+  flushUsage(Date.now());
   setCapturedTab(null, null);
   chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
   broadcastState(false);
@@ -361,6 +367,220 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   } catch {
     stopCapture();
   }
+});
+
+// ── instrufilt.com account (shared with Karafilt) ───────────────────────────
+//
+// Ported from Karafilt's cookie-session model: the extension never talks to
+// Supabase and never holds a token. Sign-in state IS the instrufilt.com
+// session cookie; every account-bound call is a fetch with
+// credentials:"include", carried by the <all_urls> host permission (which is
+// also what bypasses CORS — the site sets no CORS headers on purpose).
+// One account works across the whole family: signing in on instrufilt.com
+// with a Karafilt account just works, because the sites share one Supabase
+// project.
+
+// www is the canonical host (the apex 308-redirects to it on Vercel); using it
+// directly saves every cookie-carrying call a redirect hop.
+const WEBSITE_DEFAULT = "https://www.instrufilt.com";
+
+async function getWebsiteBase() {
+  const { websiteUrl } = await chrome.storage.local.get({ websiteUrl: WEBSITE_DEFAULT });
+  return (websiteUrl || "").trim().replace(/\/+$/, "");
+}
+
+async function fetchWithTimeout(url, opts, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Sign-in round-trip: the panel opens /login in a floating popup window via
+// OPEN_LOGIN; when that page lands on /account (the post-login redirect),
+// close the popup, refocus the tab the user came from, and broadcast
+// ACCOUNT_CHANGED so the panel re-probes. State lives in storage.session so
+// an idle SW restart mid-login doesn't lose it.
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (!changeInfo.url) return;
+  const { loginWatch } = await chrome.storage.session.get({ loginWatch: null });
+  if (!loginWatch || tabId !== loginWatch.loginTabId) return;
+  let path;
+  try {
+    path = new URL(changeInfo.url).pathname;
+  } catch {
+    return;
+  }
+  if (path !== "/account") return;
+  await chrome.storage.session.set({ loginWatch: null });
+  if (loginWatch.loginWindowId != null) {
+    chrome.windows.remove(loginWatch.loginWindowId).catch(() => {});
+  } else {
+    chrome.tabs.remove(tabId).catch(() => {});
+  }
+  // The panel stayed visible the whole time (popup floats above it), so no
+  // visibilitychange fires — tell it explicitly to re-check the session.
+  chrome.runtime.sendMessage({ type: "ACCOUNT_CHANGED" }).catch(() => {});
+  if (loginWatch.returnTabId != null) {
+    try {
+      const ret = await chrome.tabs.get(loginWatch.returnTabId);
+      await chrome.tabs.update(ret.id, { active: true });
+      chrome.windows.update(ret.windowId, { focused: true }).catch(() => {});
+    } catch {
+      // The original tab is gone — nothing to return to.
+    }
+  }
+});
+
+// Abandoned sign-in: user closed the login tab themselves — stop watching.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.session.get({ loginWatch: null }, ({ loginWatch }) => {
+    if (loginWatch && loginWatch.loginTabId === tabId) {
+      chrome.storage.session.set({ loginWatch: null });
+    }
+  });
+});
+
+// ── usage telemetry (practice segments) ─────────────────────────────────────
+//
+// Ported from Karafilt. Each segment is one contiguous stretch of isolation on
+// a single song in a single mode; the account page and Hall of Fame are built
+// from these. The open segment is persisted to storage.local and heartbeaten
+// once a minute by an alarm, so an evicted SW loses at most ~1 minute of an
+// abrupt end. Best-effort: a dropped POST is never retried.
+
+const USAGE_MIN_SECONDS = 3; // ignore accidental blips
+const USAGE_HEARTBEAT_ALARM = "if-usage-heartbeat";
+let currentUsage = null;  // open segment, or null when not isolating
+let lastKnownSong = null; // last MEDIA_STATE from the captured tab (seeds metadata)
+
+function persistUsage() {
+  if (currentUsage) chrome.storage.local.set({ ifPendingUsage: currentUsage });
+  else chrome.storage.local.remove("ifPendingUsage");
+}
+
+// Begin a segment for the captured tab/mode, seeding song metadata from the
+// last media report when it matches the same video key (so even the first
+// segment has a title; panel-closed sessions get video_key only).
+function openUsage(url, mode, meta) {
+  if (currentUsage) flushUsage(Date.now()); // never overwrite an open segment
+  const key = (meta && meta.videoKey) || deriveVideoKey(url || capturedTabUrl);
+  if (!meta && lastKnownSong && lastKnownSong.videoKey === key) meta = lastKnownSong;
+  const t = Date.now();
+  currentUsage = {
+    videoKey: key,
+    videoUrl: url || capturedTabUrl || null,
+    songTitle: (meta && meta.songTitle) || null,
+    trackName: (meta && meta.trackName) || null,
+    artistName: (meta && meta.artistName) || null,
+    mode: mode || settings.mode || null,
+    startedAtMs: t,
+    lastBeatMs: t,
+  };
+  persistUsage();
+  chrome.alarms.create(USAGE_HEARTBEAT_ALARM, { periodInMinutes: 1 });
+}
+
+// End the open segment (if any) and post it. Idempotent: safe to call from
+// every stop path even when nothing is open.
+function flushUsage(endMs) {
+  const seg = currentUsage;
+  currentUsage = null;
+  persistUsage();
+  chrome.alarms.clear(USAGE_HEARTBEAT_ALARM);
+  if (!seg || !seg.videoKey) return;
+  const end = endMs || seg.lastBeatMs || Date.now();
+  const seconds = Math.round((end - seg.startedAtMs) / 1000);
+  if (seconds < USAGE_MIN_SECONDS) return;
+  sendFilterUsage({
+    videoKey: seg.videoKey,
+    videoUrl: seg.videoUrl,
+    songTitle: seg.songTitle,
+    trackName: seg.trackName,
+    artistName: seg.artistName,
+    filterMode: seg.mode,
+    seconds,
+    startedAt: seg.startedAtMs,
+    endedAt: end,
+    extensionVersion: chrome.runtime.getManifest().version,
+  });
+}
+
+// Drop the open segment without posting it — for capture paths that never
+// actually produced audio (picker cancelled, worklet failed).
+function discardUsage() {
+  currentUsage = null;
+  persistUsage();
+  chrome.alarms.clear(USAGE_HEARTBEAT_ALARM);
+}
+
+// Cookie-carrying POST to the website — same auth path as SUBMIT_FILTER_RATING.
+async function sendFilterUsage(payload) {
+  const base = await getWebsiteBase();
+  if (!base) return;
+  try {
+    await fetchWithTimeout(
+      `${base}/api/filter-usage`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      },
+      8000,
+    );
+  } catch {
+    // Best-effort telemetry — a dropped segment isn't worth retrying.
+  }
+}
+
+// On SW startup: adopt or flush a segment a previous (evicted) worker left
+// open. If the capture genuinely survived (offscreen document still alive),
+// the segment continues — heartbeats resume and nothing is lost. Otherwise
+// the capture ended with the old worker, so the segment ends at its last
+// good beat.
+async function recoverPendingUsage(captureStillActive) {
+  const { ifPendingUsage } = await chrome.storage.local.get({ ifPendingUsage: null });
+  if (!ifPendingUsage || !ifPendingUsage.videoKey) return;
+  if (captureStillActive && !currentUsage) {
+    currentUsage = ifPendingUsage;
+    chrome.alarms.create(USAGE_HEARTBEAT_ALARM, { periodInMinutes: 1 });
+    return;
+  }
+  await chrome.storage.local.remove("ifPendingUsage");
+  const end = ifPendingUsage.lastBeatMs || ifPendingUsage.startedAtMs;
+  const seconds = Math.round((end - ifPendingUsage.startedAtMs) / 1000);
+  if (seconds < USAGE_MIN_SECONDS) return;
+  sendFilterUsage({
+    videoKey: ifPendingUsage.videoKey,
+    videoUrl: ifPendingUsage.videoUrl,
+    songTitle: ifPendingUsage.songTitle,
+    trackName: ifPendingUsage.trackName,
+    artistName: ifPendingUsage.artistName,
+    filterMode: ifPendingUsage.mode,
+    seconds,
+    startedAt: ifPendingUsage.startedAtMs,
+    endedAt: end,
+    extensionVersion: chrome.runtime.getManifest().version,
+  });
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== USAGE_HEARTBEAT_ALARM) return;
+  if (!currentUsage) {
+    chrome.alarms.clear(USAGE_HEARTBEAT_ALARM);
+    return;
+  }
+  // If capture is no longer active, close the segment at the last good beat.
+  if (capturedTabId === null) {
+    flushUsage(currentUsage.lastBeatMs);
+    return;
+  }
+  currentUsage.lastBeatMs = Date.now();
+  persistUsage();
 });
 
 // ── lyrics ──────────────────────────────────────────────────────────────────
@@ -529,11 +749,184 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleFetchChart(message).then(sendResponse);
       return true;
 
-    // MEDIA_STATE / PLAYBACK_TIME / SONG_CHANGED are deliberately NOT handled
-    // here. chrome.runtime.sendMessage from a content script already reaches
-    // every extension page — the side panel AND the offscreen document — so
-    // relaying them through the SW would deliver each one twice. Both filter by
-    // sender.tab.id instead.
+    // MEDIA_STATE / PLAYBACK_TIME / SONG_CHANGED are deliberately never
+    // RELAYED here. chrome.runtime.sendMessage from a content script already
+    // reaches every extension page — the side panel AND the offscreen document
+    // — so forwarding them would deliver each one twice. Both filter by
+    // sender.tab.id instead. MEDIA_STATE from the captured tab IS read
+    // passively below, to stamp song metadata onto usage segments and split a
+    // segment when the song changes — a segment describes one song.
+
+    case "MEDIA_STATE": {
+      const st = message.state;
+      const fromTab = sender && sender.tab ? sender.tab.id : null;
+      if (!st || fromTab === null) return false;
+      const meta = {
+        videoKey: st.videoKey || null,
+        songTitle: st.cleanedTitle || null,
+        trackName: st.track || null,
+        artistName: st.artist || null,
+      };
+      if (fromTab === capturedTabId || capturedTabId === null) lastKnownSong = meta;
+      if (fromTab === capturedTabId && currentUsage && meta.videoKey) {
+        if (currentUsage.videoKey !== meta.videoKey) {
+          flushUsage(Date.now());
+          openUsage(capturedTabUrl, settings.mode, meta);
+        } else if (!currentUsage.songTitle && (meta.songTitle || meta.trackName)) {
+          // The first MEDIA_STATE often lands after the segment opened —
+          // backfill the metadata rather than shipping a title-less row.
+          currentUsage.songTitle = meta.songTitle;
+          currentUsage.trackName = meta.trackName;
+          currentUsage.artistName = meta.artistName;
+          persistUsage();
+        }
+      }
+      return false;
+    }
+
+    case "OPEN_LOGIN":
+      // Open the sign-in page in a floating popup window — reads like a modal
+      // auth dialog, and the music tab never loses visibility. The
+      // tabs.onUpdated watcher closes it the moment login lands on /account.
+      (async () => {
+        const width = 420, height = 640;
+        const bounds = { width, height };
+        try {
+          // Center on the user's current window.
+          const cur = await chrome.windows.getLastFocused();
+          bounds.left = Math.max(0, Math.round((cur.left ?? 0) + ((cur.width ?? width) - width) / 2));
+          bounds.top = Math.max(0, Math.round((cur.top ?? 0) + ((cur.height ?? height) - height) / 2));
+        } catch {}
+        const base = await getWebsiteBase();
+        const win = await chrome.windows.create({
+          url: message.loginUrl || `${base}/login`,
+          type: "popup",
+          ...bounds,
+        });
+        const loginTabId = win.tabs && win.tabs[0] ? win.tabs[0].id : null;
+        await chrome.storage.session.set({
+          loginWatch: {
+            loginTabId,
+            loginWindowId: win.id,
+            returnTabId: message.returnTabId ?? null,
+          },
+        });
+      })();
+      return false;
+
+    case "GET_ACCOUNT_STATUS":
+      // Session probe for the panel's gate + account chip. Cookie-carrying
+      // read-only fetch against the site session (/api/me).
+      (async () => {
+        const base = await getWebsiteBase();
+        if (!base) {
+          sendResponse({ disabled: true });
+          return;
+        }
+        try {
+          const res = await fetchWithTimeout(
+            `${base}/api/me`,
+            { credentials: "include", headers: { Accept: "application/json" } },
+            8000,
+          );
+          if (res.ok) {
+            const me = await res.json();
+            sendResponse({ signedIn: true, ...me, accountUrl: `${base}/account` });
+          } else {
+            sendResponse({ signedIn: false, status: res.status, loginUrl: `${base}/login` });
+          }
+        } catch {
+          sendResponse({ signedIn: false, error: "network", loginUrl: `${base}/login` });
+        }
+      })();
+      return true; // async response
+
+    case "SUBMIT_FILTER_RATING":
+      // Forward a per-song vote to the website. Same cookie-carrying fetch as
+      // the account probe (the user's site session authenticates it).
+      (async () => {
+        const base = await getWebsiteBase();
+        if (!base) {
+          sendResponse({ ok: false, error: "no_site" });
+          return;
+        }
+        try {
+          const res = await fetchWithTimeout(
+            `${base}/api/filter-ratings`,
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify(message.rating || {}),
+            },
+            8000,
+          );
+          sendResponse({ ok: res.ok, status: res.status });
+        } catch {
+          sendResponse({ ok: false, error: "network" });
+        }
+      })();
+      return true; // async response
+
+    case "GET_FILTER_RATING_STATS":
+      // Public aggregate votes for a set of songs — no credentials on purpose.
+      (async () => {
+        const base = await getWebsiteBase();
+        const keys = Array.isArray(message.videoKeys) ? message.videoKeys.filter(Boolean) : [];
+        if (!base || keys.length === 0) {
+          sendResponse({ ok: false, stats: {} });
+          return;
+        }
+        try {
+          const res = await fetchWithTimeout(
+            `${base}/api/filter-ratings/stats`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify({ keys }),
+            },
+            8000,
+          );
+          if (!res.ok) {
+            sendResponse({ ok: false, stats: {} });
+            return;
+          }
+          sendResponse({ ok: true, ...(await res.json()) });
+        } catch {
+          sendResponse({ ok: false, stats: {} });
+        }
+      })();
+      return true; // async response
+
+    case "GET_MY_FILTER_RATING":
+      // The signed-in user's own current vote for one song.
+      (async () => {
+        const base = await getWebsiteBase();
+        if (!base || !message.videoKey) {
+          sendResponse({ ok: false });
+          return;
+        }
+        try {
+          const res = await fetchWithTimeout(
+            `${base}/api/filter-ratings/mine`,
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify({ videoKey: message.videoKey }),
+            },
+            8000,
+          );
+          if (!res.ok) {
+            sendResponse({ ok: false, status: res.status });
+            return;
+          }
+          sendResponse({ ok: true, ...(await res.json()) });
+        } catch {
+          sendResponse({ ok: false, error: "network" });
+        }
+      })();
+      return true; // async response
 
     // CHORD_CHART likewise: the offscreen document broadcasts it and the panel
     // receives it directly.
@@ -552,6 +945,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "SET_SETTING": {
       const { key, value } = message;
       if (!(key in DEFAULTS)) { sendResponse({ ok: false }); return false; }
+      // A usage segment describes one song in ONE mode — switching modes
+      // mid-capture closes the segment and opens a fresh one.
+      if (key === "mode" && capturedTabId !== null && currentUsage) {
+        const meta = lastKnownSong && lastKnownSong.videoKey === currentUsage.videoKey
+          ? lastKnownSong : null;
+        flushUsage(Date.now());
+        openUsage(capturedTabUrl, value, meta);
+      }
       settings[key] = value;
       persistSettings();
       const forward = {
@@ -579,9 +980,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
 
-    // From the offscreen document.
+    // From the offscreen document. The optimistic segment is discarded, not
+    // flushed — no audio was ever produced.
     case "DISPLAY_MEDIA_FAILED":
     case "CAPTURE_FAILED":
+      discardUsage();
       setCapturedTab(null, null);
       broadcastState(false);
       return false;

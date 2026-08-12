@@ -110,11 +110,9 @@ if (existsSync(wasm)) {
 // with no obvious cause.
 console.log("\npermissions");
 const perms = new Set(manifest.permissions || []);
-for (const p of ["tabCapture", "offscreen", "storage", "sidePanel", "activeTab", "tabs", "contextMenus"]) {
+for (const p of ["tabCapture", "offscreen", "storage", "sidePanel", "activeTab", "tabs", "contextMenus", "alarms"]) {
   check(`declares "${p}"`, () => assert.ok(perms.has(p), `service-worker.js uses chrome.${p.replace("sidePanel","sidePanel")}`));
 }
-check('does NOT declare "alarms"', () =>
-  assert.ok(!perms.has("alarms"), "alarms exists only for Karafilt's usage heartbeat; not ported"));
 check('does NOT declare "unlimitedStorage"', () =>
   assert.ok(!perms.has("unlimitedStorage"), "chord charts are ~12KB/song; this only invites review questions"));
 

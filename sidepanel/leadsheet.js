@@ -559,8 +559,29 @@
         if (!paused && rafId === null) rafId = requestAnimationFrame(rafTick);
       },
 
-      setStatus(text) {
-        if (statusEl) statusEl.textContent = text || "";
+      // Accepts a plain string or a list of {text, href?} segments (joined
+      // with " · "); segments with an href render as links, so source credits
+      // (Karalyr) can point at where the data comes from.
+      setStatus(status) {
+        if (!statusEl) return;
+        if (!status || typeof status === "string") {
+          statusEl.textContent = status || "";
+          return;
+        }
+        statusEl.textContent = "";
+        status.forEach((seg, i) => {
+          if (i > 0) statusEl.appendChild(document.createTextNode(" · "));
+          if (seg.href) {
+            const a = document.createElement("a");
+            a.href = seg.href;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.textContent = seg.text;
+            statusEl.appendChild(a);
+          } else {
+            statusEl.appendChild(document.createTextNode(seg.text));
+          }
+        });
       },
 
       // Stores the text rather than painting it directly: chords can arrive

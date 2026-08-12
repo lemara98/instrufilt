@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Instrufilt — isolate vocals, practise your instrument",
-  "version": "0.1.0",
+  "name": "Instrufilt",
+  "version": "1.0.0",
   "description": "Isolate the lead vocal in any tab and follow a synced chord chart. Practise your instrument against the original singer.",
   "minimum_chrome_version": "111",
 
@@ -13,7 +13,8 @@
     "storage",
     "sidePanel",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "alarms"
   ],
 
   "host_permissions": ["<all_urls>"],

@@ -476,6 +476,14 @@ body {
   text-overflow: ellipsis;
 }
 .sheet-status:empty { display: none; }
+/* Source-credit links (Karalyr) stay as quiet as the rest of the strip; the
+   dotted underline is the only tell that they go somewhere. */
+.sheet-status a {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.sheet-status a:hover { color: var(--text); }
 
 /* Instrumental count-in. For a musician these stretches — intros, solos,
    breakdowns — are the parts being played, so the bar earns its space. */
@@ -806,5 +814,143 @@ input[type="range"]:disabled { opacity: .45; cursor: not-allowed; }
   margin: 0;
   font-family: var(--font-mono);
   font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+/* ── account (gate, chip) and per-song vote ──────────────────────────────
+   Surfaces owned by account.js. The gate is a full-panel cover, same model
+   as Karafilt's: nothing underneath is interactive until the session probe
+   answers signed-in. */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 60%;
+  padding: 3px 9px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.account-chip:hover { background: var(--surface-hover); }
+.account-chip[hidden] { display: none; }
+
+.account-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.account-email {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vote-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.vote-row[hidden] { display: none; }
+
+.vote-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.vote-btn:hover { background: var(--surface-hover); color: var(--text); }
+.vote-btn:focus-visible { outline: 2px solid var(--ifA); outline-offset: 2px; }
+.vote-btn.is-selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--ifA);
+}
+.vote-count { font-family: var(--font-mono); font-size: 10.5px; }
+.vote-count:empty { display: none; }
+
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(11, 14, 26, 0.97);
+  backdrop-filter: blur(6px);
+}
+.auth-gate[hidden] { display: none; }
+
+.auth-gate-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  max-width: 280px;
+}
+
+.auth-gate-mark {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 2px;
+}
+
+.auth-gate-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.auth-gate-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.auth-gate-btn { width: 100%; margin-top: 4px; }
+
+.auth-gate-hint {
+  margin: 0;
+  font-size: 11px;
   color: var(--text-dim);
 }
