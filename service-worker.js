@@ -169,7 +169,17 @@ async function ensureOffscreenDocument() {
 
 // ── starting and stopping ───────────────────────────────────────────────────
 
+// Both start paths refuse while signed out. The command / context-menu
+// handlers have already opened the panel by the time this runs, so the
+// ACCOUNT_CHANGED broadcast makes it re-probe and show the sign-in gate
+// instead of silently doing nothing.
+function refuseSignedOut() {
+  chrome.runtime.sendMessage({ type: "ACCOUNT_CHANGED" }).catch(() => {});
+  return { success: false, error: "signin_required" };
+}
+
 async function handleStartCapture(tabId, providedStreamId) {
+  if (!(await isSignedIn())) return refuseSignedOut();
   try {
     if (capturedTabId !== null && capturedTabId !== tabId) {
       chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
@@ -209,6 +219,7 @@ async function handleStartCapture(tabId, providedStreamId) {
 // panel. getDisplayMedia works everywhere but shows a picker, so it is the
 // fallback rather than the default.
 async function handleStartCaptureViaDisplayMedia(tabId) {
+  if (!(await isSignedIn())) return refuseSignedOut();
   try {
     await ensureOffscreenDocument();
     let url = null;
@@ -399,6 +410,46 @@ async function fetchWithTimeout(url, opts, timeoutMs) {
   }
 }
 
+// The panel's auth-gate overlay is only UI — the keyboard shortcut and the
+// context menu start capture without ever rendering it. isSignedIn() is the
+// enforcement side: every capture start funnels through handleStartCapture /
+// handleStartCaptureViaDisplayMedia, and both refuse until /api/me says the
+// site session exists. Cached so Alt+Shift+I doesn't pay a network round-trip
+// per press; a signed-out answer is kept only briefly, so signing in on the
+// site (outside our login popup, which clears the cache itself) is noticed
+// within seconds.
+const AUTH_TTL_SIGNED_IN = 5 * 60 * 1000;
+const AUTH_TTL_SIGNED_OUT = 20 * 1000;
+let authCache = null; // { signedIn, at }
+
+function noteAuth(signedIn) {
+  authCache = { signedIn, at: Date.now() };
+}
+
+async function isSignedIn() {
+  const base = await getWebsiteBase();
+  // No Website URL configured shouldn't happen with the default site, but if
+  // it does, don't lock the user out (mirrors the panel gate in account.js).
+  if (!base) return true;
+  if (authCache && Date.now() - authCache.at < (authCache.signedIn ? AUTH_TTL_SIGNED_IN : AUTH_TTL_SIGNED_OUT)) {
+    return authCache.signedIn;
+  }
+  try {
+    const res = await fetchWithTimeout(
+      `${base}/api/me`,
+      { credentials: "include", headers: { Accept: "application/json" } },
+      8000,
+    );
+    noteAuth(res.ok);
+    return res.ok;
+  } catch {
+    // Site unreachable: fail closed like the panel gate does, but with the
+    // short TTL so a recovered connection retries soon.
+    noteAuth(false);
+    return false;
+  }
+}
+
 // Sign-in round-trip: the panel opens /login in a floating popup window via
 // OPEN_LOGIN; when that page lands on /account (the post-login redirect),
 // close the popup, refocus the tab the user came from, and broadcast
@@ -423,6 +474,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   }
   // The panel stayed visible the whole time (popup floats above it), so no
   // visibilitychange fires — tell it explicitly to re-check the session.
+  authCache = null; // the signed-out answer is stale the moment login lands
   chrome.runtime.sendMessage({ type: "ACCOUNT_CHANGED" }).catch(() => {});
   if (loginWatch.returnTabId != null) {
     try {
@@ -829,6 +881,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             { credentials: "include", headers: { Accept: "application/json" } },
             8000,
           );
+          noteAuth(res.ok);
           if (res.ok) {
             const me = await res.json();
             sendResponse({ signedIn: true, ...me, accountUrl: `${base}/account` });
@@ -836,6 +889,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ signedIn: false, status: res.status, loginUrl: `${base}/login` });
           }
         } catch {
+          noteAuth(false);
           sendResponse({ signedIn: false, error: "network", loginUrl: `${base}/login` });
         }
       })();

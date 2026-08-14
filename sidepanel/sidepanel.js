@@ -394,14 +394,19 @@
     // grant a side-panel click carries does not survive into this context on
     // every browser, and the SW's own path is the one that works.
     let res = await sendMessage({ type: "START_CAPTURE", tabId });
-    if (!res || !res.success) {
+    if ((!res || !res.success) && !(res && res.error === "signin_required")) {
       // Brave and Edge reject getMediaStreamId from a panel gesture; the
       // picker-based path works everywhere.
       res = await sendMessage({ type: "START_CAPTURE_DISPLAY_MEDIA", tabId });
     }
 
     els.toggleBtn.disabled = false;
-    if (!res || !res.success) {
+    if (res && res.error === "signin_required") {
+      // The SW refused because there's no site session; it has already
+      // broadcast ACCOUNT_CHANGED, so the sign-in gate is about to cover the
+      // panel — no capture error to show.
+      renderCaptureState(false);
+    } else if (!res || !res.success) {
       renderCaptureState(false, { error: "Couldn't capture this tab. Try the Alt+Shift+I shortcut." });
     }
     // Success is confirmed by the CAPTURE_ACTIVE broadcast, not here — the
